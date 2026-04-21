@@ -5,88 +5,147 @@ from pydantic import BaseModel
 from typing import Dict, List
 import uvicorn
 import os
+import sqlite3
 
 app = FastAPI(title="Smart Billing POS")
 
-# Product Database based on Arduino code
-PRODUCTS = {
-    "7297745C": {"item": "Rice 1kg", "price": 20},
-    "F175D3AD": {"item": "Milk", "price": 30},
-    "1FCD1AD": {"item": "Biscuit", "price": 10},
-    "918AB7AD": {"item": "Yoghurt", "price": 10},
-    "6149AAAD": {"item": "Mango", "price": 10},
-    "B1A2C4AD": {"item": "Wheat 2kg", "price": 10},
-    "E3DE4F6": {"item": "Oats", "price": 10},
-}
+DB_FILE = "pos.db"
 
-# Single active cart for the billing system
-cart: List[Dict] = []
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    # Create products table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            uid TEXT PRIMARY KEY,
+            item TEXT,
+            price INTEGER
+        )
+    ''')
+    
+    # Create cart table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cart (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT,
+            item TEXT,
+            price INTEGER,
+            quantity INTEGER
+        )
+    ''')
+    
+    # Insert default products if empty
+    cursor.execute("SELECT COUNT(*) FROM products")
+    if cursor.fetchone()[0] == 0:
+        default_products = [
+            ("7297745C", "Rice 1kg", 20),
+            ("F175D3AD", "Milk", 30),
+            ("1FCD1AD", "Biscuit", 10),
+            ("918AB7AD", "Yoghurt", 10),
+            ("6149AAAD", "Mango", 10),
+            ("B1A2C4AD", "Wheat 2kg", 10),
+            ("E3DE4F6", "Oats", 10),
+        ]
+        cursor.executemany("INSERT INTO products (uid, item, price) VALUES (?, ?, ?)", default_products)
+        
+    conn.commit()
+    conn.close()
+
+# Initialize Database on startup
+init_db()
+
+def get_db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 class ScanRequest(BaseModel):
     uid: str
     quantity: int = 1
 
-class ManualItem(BaseModel):
-    item: str
-    price: int
-
 @app.post("/api/scan")
 def handle_scan(request: ScanRequest):
     uid = request.uid.upper()
 
-    if uid not in PRODUCTS:
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if product exists
+    cursor.execute("SELECT item, price FROM products WHERE uid = ?", (uid,))
+    product = cursor.fetchone()
+    
+    if not product:
+        conn.close()
         raise HTTPException(status_code=404, detail="Unknown Item")
 
-    product = PRODUCTS[uid]
+    # Check if item is already in cart
+    cursor.execute("SELECT id, quantity FROM cart WHERE uid = ?", (uid,))
+    cart_item = cursor.fetchone()
     
-    found = False
-    for item in cart:
-        if item["uid"] == uid:
-            item["quantity"] += request.quantity
-            found = True
-            break
-            
-    if not found:
-        cart.append({
-            "uid": uid,
-            "item": product["item"],
-            "price": product["price"],
-            "quantity": request.quantity
-        })
+    if cart_item:
+        new_quantity = cart_item["quantity"] + request.quantity
+        cursor.execute("UPDATE cart SET quantity = ? WHERE id = ?", (new_quantity, cart_item["id"]))
+    else:
+        cursor.execute("INSERT INTO cart (uid, item, price, quantity) VALUES (?, ?, ?, ?)", 
+                       (uid, product["item"], product["price"], request.quantity))
+                       
+    conn.commit()
+    
+    # Fetch updated cart
+    cursor.execute("SELECT uid, item, price, quantity FROM cart ORDER BY id ASC")
+    cart = [dict(row) for row in cursor.fetchall()]
+    conn.close()
     
     return {"status": "success", "message": f"Added {request.quantity}x {product['item']}", "cart": cart}
 
 @app.get("/api/cart")
 def get_cart():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT uid, item, price, quantity FROM cart ORDER BY id ASC")
+    cart = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
     total = sum(item["price"] * item["quantity"] for item in cart)
     return {
         "items": cart,
         "total": total
     }
 
-@app.post("/api/cart/add_manual")
-def add_manual(item: ManualItem):
-    cart.append({
-        "uid": "MANUAL",
-        "item": item.item,
-        "price": item.price
-    })
-    return {"status": "success", "cart": cart}
-
 @app.post("/api/cart/clear")
 def clear_cart():
-    cart.clear()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM cart")
+    conn.commit()
+    conn.close()
     return {"status": "success"}
 
 @app.post("/api/cart/remove/{index}")
 def remove_item(index: int):
-    if 0 <= index < len(cart):
-        cart.pop(index)
+    # Find item by its array index position
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM cart ORDER BY id ASC")
+    rows = cursor.fetchall()
+    
+    if 0 <= index < len(rows):
+        item_id = rows[index]["id"]
+        cursor.execute("DELETE FROM cart WHERE id = ?", (item_id,))
+        conn.commit()
+        
+    conn.close()
     return {"status": "success"}
 
 @app.get("/api/products")
 def get_products():
-    return PRODUCTS
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT uid, item, price FROM products")
+    products = {row["uid"]: {"item": row["item"], "price": row["price"]} for row in cursor.fetchall()}
+    conn.close()
+    return products
 
 # Mount static files
 os.makedirs("static", exist_ok=True)
