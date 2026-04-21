@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Billing POS</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- jsPDF and AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Topbar -->
+    <header class="topbar">
+        <div class="logo">
+            <div class="logo-icon"><i class="fa-solid fa-store"></i></div>
+            <h2>Smart POS</h2>
+        </div>
+        <div class="topbar-actions">
+            <div class="clock" id="live-clock">--:-- --</div>
+        </div>
+    </header>
+
+    <main class="pos-layout">
+        <!-- Left Side: Products Database -->
+        <section class="products-section">
+            <div class="section-header">
+                <h2>Product Database</h2>
+                <p>Available items in store</p>
+            </div>
+            <div class="products-grid" id="products-container">
+                <!-- Products will be injected here via JS -->
+            </div>
+        </section>
+
+        <!-- Right Side: Current Cart -->
+        <section class="cart-section">
+            <div class="cart-card">
+                <div class="cart-header">
+                    <h2>Current Bill</h2>
+                    <button class="btn btn-secondary-sm" onclick="openManualModal()">
+                        <i class="fa-solid fa-plus"></i> Manual Add
+                    </button>
+                </div>
+                
+                <div class="cart-body" id="cart-items">
+                    <!-- Cart items will be injected here via JS -->
+                </div>
+
+                <div class="cart-footer">
+                    <div class="total-row">
+                        <span>Total Items</span>
+                        <span id="total-count">0</span>
+                    </div>
+                    <div class="total-row grand-total">
+                        <span>Grand Total</span>
+                        <span id="total-price">₹0</span>
+                    </div>
+                    
+                    <button class="btn btn-primary w-100 mt-3" id="checkout-btn" onclick="openCheckout()" disabled>
+                        <i class="fa-solid fa-file-invoice"></i> Checkout & Print PDF
+                    </button>
+                    <button class="btn btn-danger w-100 mt-2" id="clear-btn" onclick="clearCart()" disabled>
+                        <i class="fa-solid fa-trash"></i> Clear Cart
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Manual Add Modal -->
+    <div class="modal-overlay" id="manual-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add Item to Bill</h3>
+                <button class="close-btn" onclick="closeManualModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="manual-item-select">Select Product (by RFID/Name)</label>
+                    <select id="manual-item-select" class="form-control">
+                        <!-- Options injected via JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="manual-item-qty">Quantity</label>
+                    <input type="number" id="manual-item-qty" class="form-control" value="1" min="1">
+                </div>
+                <button class="btn btn-primary w-100 mt-3" onclick="submitManualItem()">Add to Bill</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div class="modal-overlay" id="payment-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Checkout Success</h3>
+                <button class="close-btn" onclick="closePaymentModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
+                <h2 id="checkout-total-display">₹0</h2>
+                <p id="checkout-items-count">Payment completed successfully.</p>
+                <div class="modal-actions mt-4">
+                    <button class="btn btn-secondary" onclick="closePaymentModal()">Close</button>
+                    <button class="btn btn-primary" onclick="generatePDF()"><i class="fa-solid fa-file-pdf"></i> Download Receipt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
