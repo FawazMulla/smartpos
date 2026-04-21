@@ -232,18 +232,38 @@ async function generatePDF() {
         margin: { top: 35 }
     });
     
-    // Total
-    const finalY = doc.lastAutoTable.finalY || 35;
+    // Total and Footer positioning
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let finalY = doc.lastAutoTable.finalY || 35;
+    
+    // Check if there is enough space for the total at the bottom
+    if (finalY > pageHeight - 40) {
+        doc.addPage();
+    }
+    
+    // Structured total at the bottom right
+    const bottomY = pageHeight - 35;
     doc.setFontSize(14);
     doc.setTextColor(30, 41, 59);
     doc.setFont("helvetica", "bold");
-    doc.text(`Total Amount Paid: Rs. ${currentTotal}`, 14, finalY + 15);
     
-    // Footer message
+    const totalText = `Total Amount Paid: Rs. ${currentTotal}`;
+    const textWidth = doc.getTextWidth(totalText);
+    
+    // Right aligned (pageWidth - textWidth - right margin 14)
+    doc.text(totalText, pageWidth - textWidth - 14, bottomY);
+    
+    // Line separator above total
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(pageWidth - textWidth - 20, bottomY - 8, pageWidth - 14, bottomY - 8);
+    
+    // Footer message at the very bottom
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(150, 150, 150);
-    doc.text("Thank you for your purchase!", 105, finalY + 30, null, null, "center");
+    doc.text("Thank you for your purchase!", pageWidth / 2, pageHeight - 15, null, null, "center");
     
     // Save
     doc.save(`Receipt_${Date.now()}.pdf`);
