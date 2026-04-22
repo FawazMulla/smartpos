@@ -35,6 +35,28 @@ def init_db():
         )
     ''')
     
+    # Create bills table for history
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            total INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create bill_items table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bill_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bill_id INTEGER,
+            uid TEXT,
+            item TEXT,
+            price INTEGER,
+            quantity INTEGER,
+            FOREIGN KEY(bill_id) REFERENCES bills(id)
+        )
+    ''')
+    
     # Insert default products if empty
     cursor.execute("SELECT COUNT(*) FROM products")
     if cursor.fetchone()[0] == 0:
@@ -112,6 +134,129 @@ def get_cart():
         "items": cart,
         "total": total
     }
+
+from datetime import datetime
+from fpdf import FPDF
+from fastapi.responses import Response
+
+@app.post("/api/checkout")
+def checkout():
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get current cart total and items
+    cursor.execute("SELECT uid, item, price, quantity FROM cart")
+    cart_items = [dict(row) for row in cursor.fetchall()]
+    
+    if not cart_items:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Cart is empty")
+        
+    total = sum(item["price"] * item["quantity"] for item in cart_items)
+    
+    # Insert bill record
+    cursor.execute("INSERT INTO bills (total) VALUES (?)", (total,))
+    bill_id = cursor.lastrowid
+    
+    # Insert bill items
+    for item in cart_items:
+        cursor.execute("INSERT INTO bill_items (bill_id, uid, item, price, quantity) VALUES (?, ?, ?, ?, ?)",
+                       (bill_id, item['uid'], item['item'], item['price'], item['quantity']))
+                       
+    # Clear cart
+    cursor.execute("DELETE FROM cart")
+    conn.commit()
+    conn.close()
+    
+    return {
+        "status": "success", 
+        "message": "Bill created successfully", 
+        "bill_id": bill_id, 
+        "total": total
+    }
+
+@app.get("/api/latest_checkout")
+def get_latest_checkout():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, total FROM bills ORDER BY id DESC LIMIT 1")
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"bill_id": row["id"], "total": row["total"]}
+    return {"bill_id": None}
+
+@app.get("/api/bills/{bill_id}/pdf")
+def get_bill_pdf(bill_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, total, created_at FROM bills WHERE id = ?", (bill_id,))
+    bill = cursor.fetchone()
+    if not bill:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Bill not found")
+        
+    cursor.execute("SELECT uid, item, price, quantity FROM bill_items WHERE bill_id = ?", (bill_id,))
+    cart_items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # Generate PDF
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("helvetica", "B", 24)
+    pdf.set_text_color(14, 165, 233)
+    pdf.cell(0, 10, "Smart POS Bill", new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_font("helvetica", "", 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 10, f"Bill #{bill_id}  |  Date: {bill['created_at']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+    
+    # Table Header
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(10, 10, "#", border=1)
+    pdf.cell(70, 10, "Item Description", border=1)
+    pdf.cell(40, 10, "Item ID", border=1)
+    pdf.cell(15, 10, "Qty", border=1)
+    pdf.cell(25, 10, "Price", border=1)
+    pdf.cell(30, 10, "Total", border=1, new_x="LMARGIN", new_y="NEXT")
+    
+    # Table Rows
+    pdf.set_font("helvetica", "", 10)
+    pdf.set_text_color(50, 50, 50)
+    for idx, item in enumerate(cart_items):
+        pdf.cell(10, 10, str(idx + 1), border=1)
+        pdf.cell(70, 10, item["item"], border=1)
+        pdf.cell(40, 10, item["uid"], border=1)
+        pdf.cell(15, 10, str(item["quantity"]), border=1)
+        pdf.cell(25, 10, f"Rs. {item['price']}", border=1)
+        pdf.cell(30, 10, f"Rs. {item['price'] * item['quantity']}", border=1, new_x="LMARGIN", new_y="NEXT")
+        
+    pdf.ln(10)
+    
+    # Total
+    pdf.set_font("helvetica", "B", 14)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(0, 10, f"Total Amount Paid: Rs. {bill['total']}", align="R", new_x="LMARGIN", new_y="NEXT")
+    
+    # Footer
+    pdf.ln(10)
+    pdf.set_font("helvetica", "", 10)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 10, "Thank you for your purchase!", align="C")
+    
+    pdf_bytes = pdf.output()
+    if type(pdf_bytes) is str: # fpdf legacy support
+        pdf_bytes = pdf_bytes.encode("latin1")
+        
+    headers = {
+        'Content-Disposition': f'attachment; filename="Receipt_Bill_{bill_id}.pdf"'
+    }
+    return Response(content=bytes(pdf_bytes), media_type="application/pdf", headers=headers)
 
 @app.post("/api/cart/clear")
 def clear_cart():

@@ -77,6 +77,38 @@ async function fetchCart() {
     }
 }
 
+// Poll latest checkout status
+let lastSeenBillId = null;
+async function checkLatestBill() {
+    try {
+        const response = await fetch('/api/latest_checkout');
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Initialization
+            if (lastSeenBillId === null && data.bill_id) {
+                lastSeenBillId = data.bill_id;
+                return;
+            }
+            
+            // If a new bill was created (e.g. from Postman or UI)
+            if (data.bill_id && data.bill_id !== lastSeenBillId) {
+                lastSeenBillId = data.bill_id;
+                window.currentBillId = data.bill_id;
+                
+                document.getElementById('checkout-total-display').innerText = `₹${data.total}`;
+                document.getElementById('checkout-items-count').innerText = `Payment completed successfully.`;
+                document.getElementById('payment-modal').classList.add('active');
+                
+                // Immediately refresh cart since it was cleared
+                fetchCart();
+            }
+        }
+    } catch (error) {
+        console.error('Error checking latest bill:', error);
+    }
+}
+
 // Render Cart in UI
 function renderCart() {
     const container = document.getElementById('cart-items');
@@ -129,6 +161,7 @@ function renderCart() {
 
 // Poll every 1 second
 setInterval(fetchCart, 1000);
+setInterval(checkLatestBill, 1000);
 fetchCart();
 
 // Remove item
@@ -154,11 +187,12 @@ function closeManualModal() {
     document.getElementById('manual-modal').classList.remove('active');
 }
 
-function openCheckout() {
-    const totalItemsCount = currentCartData.reduce((sum, item) => sum + item.quantity, 0);
-    document.getElementById('checkout-total-display').innerText = `₹${currentTotal}`;
-    document.getElementById('checkout-items-count').innerText = `Payment completed successfully for ${totalItemsCount} items.`;
-    document.getElementById('payment-modal').classList.add('active');
+async function openCheckout() {
+    const response = await fetch('/api/checkout', { method: 'POST' });
+    if (!response.ok) {
+        alert("Failed to checkout. Is the cart empty?");
+    }
+    // Note: The UI will automatically pop up the modal thanks to the checkLatestBill polling!
 }
 
 function closePaymentModal() {
@@ -192,84 +226,12 @@ async function submitManualItem() {
     }
 }
 
-// Generate PDF
-async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(24);
-    doc.setTextColor(14, 165, 233); // Primary color matching theme
-    doc.text("Smart POS Bill", 14, 20);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Date: ${new Date().toLocaleString()}`, 14, 28);
-    
-    // Items Table
-    const tableColumn = ["#", "Item Description", "Item ID", "Qty", "Price", "Total"];
-    const tableRows = [];
-    
-    currentCartData.forEach((item, index) => {
-        tableRows.push([
-            index + 1,
-            item.item,
-            item.uid,
-            item.quantity,
-            `Rs. ${item.price}`,
-            `Rs. ${item.price * item.quantity}`
-        ]);
-    });
-    
-    doc.autoTable({
-        head: [tableColumn],
-        body: tableRows,
-        startY: 35,
-        theme: 'grid',
-        headStyles: { fillColor: [248, 250, 252], textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.1 },
-        bodyStyles: { textColor: [50, 50, 50] },
-        styles: { font: 'helvetica', fontSize: 10 },
-        margin: { top: 35 }
-    });
-    
-    // Total and Footer positioning
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    let finalY = doc.lastAutoTable.finalY || 35;
-    
-    // Check if there is enough space for the total at the bottom
-    if (finalY > pageHeight - 40) {
-        doc.addPage();
+// Generate PDF (Triggered by the manual button in the popup)
+function generatePDF() {
+    if (window.currentBillId) {
+        window.location.href = `/api/bills/${window.currentBillId}/pdf`;
+        closePaymentModal();
+    } else {
+        alert("No bill ID found to download!");
     }
-    
-    // Structured total at the bottom right
-    const bottomY = pageHeight - 35;
-    doc.setFontSize(14);
-    doc.setTextColor(30, 41, 59);
-    doc.setFont("helvetica", "bold");
-    
-    const totalText = `Total Amount Paid: Rs. ${currentTotal}`;
-    const textWidth = doc.getTextWidth(totalText);
-    
-    // Right aligned (pageWidth - textWidth - right margin 14)
-    doc.text(totalText, pageWidth - textWidth - 14, bottomY);
-    
-    // Line separator above total
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.5);
-    doc.line(pageWidth - textWidth - 20, bottomY - 8, pageWidth - 14, bottomY - 8);
-    
-    // Footer message at the very bottom
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(150, 150, 150);
-    doc.text("Thank you for your purchase!", pageWidth / 2, pageHeight - 15, null, null, "center");
-    
-    // Save
-    doc.save(`Receipt_${Date.now()}.pdf`);
-    
-    // Clear the cart on backend after printing
-    await fetch(`/api/cart/clear`, { method: 'POST' });
-    closePaymentModal();
-    fetchCart();
 }

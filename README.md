@@ -67,8 +67,20 @@ Returns the current items in the cart (grouped by quantity) and the total price.
 }
 ```
 
-### 4. `POST /api/cart/remove/{index}`
+### 4. `POST /api/checkout`
+Calculates the final total, generates a new bill record in the database, and automatically clears the active cart.
+**Response (200 OK)**
+```json
+{
+  "status": "success",
+  "message": "Bill created successfully",
+  "bill_id": 1,
+  "total": 60
+}
+```
+
+### 5. `POST /api/cart/remove/{index}`
 Removes a specific item from the cart based on its array index position on the screen.
 
-### 5. `POST /api/cart/clear`
-Clears all items in the current cart (typically called after checkout to reset the bill).
+### 6. `POST /api/cart/clear`
+Clears all items in the current cart (typically called manually if the order is canceled without creating a bill).
