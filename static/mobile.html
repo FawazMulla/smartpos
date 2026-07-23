@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>SmartPOS — Customer App</title>
   <meta name="description" content="Smart shopping cart — scan, shop, and pay seamlessly."/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="icon" type="image/png" href="/static/favicon.png"/>
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#003c33"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -95,9 +101,14 @@
         <div class="nav-sub">SmartPOS Shopping</div>
       </div>
     </div>
-    <button class="nav-logout" onclick="logout()" aria-label="Sign out">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="pwa-install-btn-mobile" style="display:none;background:#00e699;color:#003c33;border:none;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;" onclick="installPWA()">
+        📥 Install App
+      </button>
+      <button class="nav-logout" onclick="logout()" aria-label="Sign out">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
   </div>
 
   <div class="scan-body">
@@ -116,6 +127,17 @@
         <div class="qr-scan-line" id="qr-scan-line"></div>
         <video id="qr-video" autoplay muted playsinline></video>
         <canvas id="qr-canvas" hidden></canvas>
+        
+        <!-- Camera Controls overlay -->
+        <div id="cam-controls" style="position:absolute;top:10px;right:10px;display:none;gap:8px;z-index:10;">
+          <button type="button" onclick="toggleTorch()" title="Toggle Flashlight" style="background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            🔦
+          </button>
+          <button type="button" onclick="switchCamera()" title="Switch Camera" style="background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            🔄
+          </button>
+        </div>
+
         <div class="qr-idle-msg" id="qr-idle-msg">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h.01M14 17h3M17 14v7M20 17h.01M20 21h.01"/></svg>
           <p>Tap to activate camera</p>

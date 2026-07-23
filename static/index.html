@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SmartPOS — Management Console</title>
   <meta name="description" content="SmartPOS admin dashboard — inventory, carts, and sales management."/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="icon" type="image/png" href="/static/favicon.png"/>
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#003c33"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -51,7 +57,7 @@
           <span class="btn-text">Sign In</span>
           <span class="btn-spin" hidden></span>
         </button>
-        <p class="gate-hint">Demo: <code>admin / admin123</code></p>
+        <p class="gate-hint">Admin: <code>admin / admin123</code> &nbsp;·&nbsp; Shopping? <a href="/mobile" style="color:#003c33;font-weight:600;text-decoration:underline;">Customer App ↗</a></p>
       </form>
 
       <form id="gate-reg" class="gate-form hidden" onsubmit="adminRegister(event)" novalidate>
@@ -125,6 +131,9 @@
     <div class="dash-topbar">
       <div class="dash-page-title" id="dash-page-title">Overview</div>
       <div class="dash-topbar-right">
+        <button id="pwa-install-btn-admin" class="topbar-pill" style="display:none;background:#003c33;color:#fff;border:none;cursor:pointer;" onclick="installPWA()">
+          📥 Install App
+        </button>
         <div class="live-dot"></div>
         <span style="font-size:12px;color:#93939f;">Live</span>
         <a href="/mobile" target="_blank" class="topbar-pill">Open Customer App ↗</a>

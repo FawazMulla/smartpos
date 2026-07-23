@@ -13,10 +13,47 @@ let dash = {
   pollTimer:    null,
 };
 
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('pwa-install-btn-admin');
+  if (btn) btn.style.display = 'inline-flex';
+});
+
+function installPWA() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        toast('PWA installed successfully!', 'success');
+      }
+      deferredPrompt = null;
+      const btn = document.getElementById('pwa-install-btn-admin');
+      if (btn) btn.style.display = 'none';
+    });
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = tryLoad('sp_admin');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+  }
+  
+  // Check any saved session
+  const saved = tryLoad('smartpos_user') || tryLoad('sp_admin') || tryLoad('sp_user');
   if (saved) {
+    if (saved.role !== 'admin') {
+      tryRemove('sp_admin');
+      const errEl = document.getElementById('gate-login-err');
+      if (errEl) {
+        errEl.style.color = '#b30000';
+        errEl.textContent = 'Customer account detected. Redirecting to Mobile App...';
+      }
+      setTimeout(() => { window.location.href = '/mobile'; }, 800);
+      return;
+    }
     dash.user = saved;
     enterDashboard();
   }
@@ -84,10 +121,24 @@ async function adminLogin(e) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Login failed');
-    dash.user = { username: data.username, role: data.role };
+    
+    // Save session
+    const userInfo = { username: data.username, role: data.role };
+    trySave('smartpos_user', userInfo);
+    
+    if (data.role !== 'admin') {
+      trySave('sp_user', userInfo);
+      errEl.style.color = '#b30000';
+      errEl.textContent = 'Access denied: Customer accounts must use the Mobile App. Redirecting...';
+      setTimeout(() => { window.location.href = '/mobile'; }, 1200);
+      return;
+    }
+    
+    dash.user = userInfo;
     trySave('sp_admin', dash.user);
     enterDashboard();
   } catch(err) {
+    errEl.style.color = '#b30000';
     errEl.textContent = err.message;
   } finally {
     setLoading(btn, false);
@@ -108,19 +159,26 @@ async function adminRegister(e) {
     const res  = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass }),
+      body: JSON.stringify({ username: user, password: pass, role: 'customer' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Registration failed');
-    dash.user = { username: data.username, role: data.role };
-    trySave('sp_admin', dash.user);
-    enterDashboard();
+    
+    const userInfo = { username: data.username, role: data.role };
+    trySave('sp_user', userInfo);
+    trySave('smartpos_user', userInfo);
+    
+    errEl.style.color = '#003c33';
+    errEl.textContent = 'Customer account created! Redirecting to Mobile App...';
+    setTimeout(() => { window.location.href = '/mobile'; }, 1200);
   } catch(err) {
+    errEl.style.color = '#b30000';
     errEl.textContent = err.message;
   } finally {
     setLoading(btn, false);
   }
 }
+
 
 function adminLogout() {
   stopDashPoll();

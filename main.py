@@ -161,6 +161,7 @@ init_db()
 class AuthRequest(BaseModel):
     username: str
     password: str
+    role: Optional[str] = "customer"
 
 class ScanRequest(BaseModel):
     uid: str
@@ -185,33 +186,52 @@ class ProductCreate(BaseModel):
 
 @app.post("/api/auth/register")
 def register(req: AuthRequest):
-    if len(req.username.strip()) < 3:
+    username = req.username.strip()
+    if len(username) < 3:
         raise HTTPException(400, "Username must be at least 3 characters")
     if len(req.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
+    
+    role = (req.role or "customer").strip().lower()
+    if role not in ["admin", "customer"]:
+        role = "customer"
+
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT id FROM users WHERE username=?", (req.username.strip(),))
+    c.execute("SELECT id FROM users WHERE username=?", (username,))
     if c.fetchone():
         conn.close()
         raise HTTPException(409, "Username already taken")
-    c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, 'customer')",
-              (req.username.strip(), hash_password(req.password)))
+    c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+              (username, hash_password(req.password), role))
     conn.commit()
     conn.close()
-    return {"status": "success", "message": "Account created", "username": req.username.strip(), "role": "customer"}
+    return {"status": "success", "message": "Account created", "username": username, "role": role}
 
 @app.post("/api/auth/login")
 def login(req: AuthRequest):
+    username = req.username.strip()
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT username, role FROM users WHERE username=? AND password=?",
-              (req.username.strip(), hash_password(req.password)))
+              (username, hash_password(req.password)))
     user = c.fetchone()
     conn.close()
     if not user:
         raise HTTPException(401, "Invalid username or password")
     return {"status": "success", "username": user["username"], "role": user["role"]}
+
+@app.get("/api/auth/me")
+def get_user_me(username: str = Query(...)):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT username, role FROM users WHERE username=?", (username.strip(),))
+    user = c.fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(404, "User not found")
+    return {"username": user["username"], "role": user["role"]}
+
 
 # ─── Cart / Pairing ───────────────────────────────────────────────────────────
 
@@ -557,6 +577,31 @@ def inventory_summary():
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/manifest.json")
+def get_manifest():
+    return FileResponse("static/manifest.json", media_type="application/json")
+
+@app.get("/sw.js")
+def get_sw():
+    return FileResponse("static/sw.js", media_type="application/javascript")
+
+@app.get("/favicon.ico")
+@app.get("/favicon.png")
+def get_favicon():
+    return FileResponse("static/favicon.png", media_type="image/png")
+
+@app.get("/apple-touch-icon.png")
+def get_apple_touch_icon():
+    return FileResponse("static/apple-touch-icon.png", media_type="image/png")
+
+@app.get("/icon-192.png")
+def get_icon192():
+    return FileResponse("static/icon-192.png", media_type="image/png")
+
+@app.get("/icon-512.png")
+def get_icon512():
+    return FileResponse("static/icon-512.png", media_type="image/png")
+
 @app.get("/mobile")
 def mobile_app():
     return FileResponse("static/mobile.html")
@@ -564,6 +609,7 @@ def mobile_app():
 @app.get("/")
 def pos_dashboard():
     return FileResponse("static/index.html")
+
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))

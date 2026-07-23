@@ -14,9 +14,34 @@ let state = {
   billId:    null,
 };
 
+let deferredPromptMobile = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPromptMobile = e;
+  const btn = document.getElementById('pwa-install-btn-mobile');
+  if (btn) btn.style.display = 'inline-block';
+});
+
+function installPWA() {
+  if (deferredPromptMobile) {
+    deferredPromptMobile.prompt();
+    deferredPromptMobile.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        toast('SmartPOS App installed!', 'success');
+      }
+      deferredPromptMobile = null;
+      const btn = document.getElementById('pwa-install-btn-mobile');
+      if (btn) btn.style.display = 'none';
+    });
+  }
+}
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = tryLoad('sp_user');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+  }
+  const saved = tryLoad('smartpos_user') || tryLoad('sp_user');
   if (saved) {
     state.user = saved;
     afterLogin();
@@ -136,7 +161,14 @@ function afterLogin() {
   const u = state.user;
   document.getElementById('nav-username').textContent = u.username;
   document.getElementById('nav-avatar').textContent   = u.username[0].toUpperCase();
-  // Admin goes to dashboard? No — same mobile flow for now.
+  const subEl = document.querySelector('.nav-sub');
+  if (subEl) {
+    if (u.role === 'admin') {
+      subEl.innerHTML = 'Admin User · <a href="/" style="color:#003c33;font-weight:600;text-decoration:underline;">Admin Console ↗</a>';
+    } else {
+      subEl.textContent = 'Customer Account';
+    }
+  }
   loadAvailableCarts();
   showScreen('screen-scan');
 }
@@ -194,60 +226,169 @@ async function loadAvailableCarts() {
   }
 }
 
-// ─── QR Scanner ──────────────────────────────────────────────────────────────
-let videoStream   = null;
-let scanningActive = false;
+// ─── Real Camera & Barcode/QR Scanner ──────────────────────────────────────────
+let videoStream      = null;
+let scanningActive   = false;
+let currentFacing    = 'environment';
+let barcodeDetector  = null;
+let lastScanTime     = 0;
+
+function playScanFeedback() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1046.5, ctx.currentTime); // C6 note
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    }
+  } catch(e) {}
+}
 
 async function startScanner() {
   const video  = document.getElementById('qr-video');
   const idle   = document.getElementById('qr-idle-msg');
   const btn    = document.getElementById('btn-scan-start');
+  const ctrl   = document.getElementById('cam-controls');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const isHttp = window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isHttp) {
+      toast('Camera requires HTTPS or localhost! Use manual entry or Render deployment URL.', 'error');
+    } else {
+      toast('Camera API not supported on this browser.', 'error');
+    }
+    return;
+  }
+
+  // Initialize native BarcodeDetector if available
+  if ('BarcodeDetector' in window) {
+    try {
+      barcodeDetector = new BarcodeDetector({
+        formats: ['qr_code', 'ean_13', 'code_128', 'upc_a', 'upc_e', 'data_matrix', 'code_39']
+      });
+    } catch(e) {
+      barcodeDetector = null;
+    }
+  }
+
   try {
-    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    let constraints = { video: { facingMode: { ideal: currentFacing }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    try {
+      videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch(e1) {
+      videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacing } });
+    }
     video.srcObject = videoStream;
-    idle.classList.add('hidden');
-    btn.style.display = 'none';
+    video.setAttribute('playsinline', true);
+    video.setAttribute('webkit-playsinline', true);
+    await video.play();
+
+    if (idle) idle.classList.add('hidden');
+    if (btn) btn.style.display = 'none';
+    if (ctrl) ctrl.style.display = 'flex';
     scanningActive = true;
-    scanningLoop();
-    toast('Camera active — aim at cart QR code');
+    requestAnimationFrame(scanningLoop);
+    toast('Camera active — point at Cart QR code', 'success');
   } catch(e) {
-    toast('Camera access denied. Use manual entry.', 'error');
+    console.error('Camera access error:', e);
+    toast('Camera error: ' + (e.message || 'Permission denied'), 'error');
   }
 }
 
 function stopScanner() {
   scanningActive = false;
+  const ctrl = document.getElementById('cam-controls');
+  if (ctrl) ctrl.style.display = 'none';
   if (videoStream) {
     videoStream.getTracks().forEach(t => t.stop());
     videoStream = null;
   }
 }
 
-function scanningLoop() {
+async function switchCamera() {
+  currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+  stopScanner();
+  await startScanner();
+}
+
+async function toggleTorch() {
+  if (!videoStream) return;
+  const track = videoStream.getVideoTracks()[0];
+  if (track && track.getCapabilities) {
+    const caps = track.getCapabilities();
+    if (caps.torch) {
+      const current = track.getSettings().torch || false;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: !current }] });
+        toast(!current ? 'Torch ON 🔦' : 'Torch OFF 💡', 'info');
+      } catch(e) {
+        toast('Flashlight control blocked by device', 'error');
+      }
+    } else {
+      toast('Torch not supported on this camera lens', 'info');
+    }
+  }
+}
+
+async function scanningLoop() {
   if (!scanningActive) return;
   const video  = document.getElementById('qr-video');
   const canvas = document.getElementById('qr-canvas');
   if (!video || !canvas) return;
+
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx  = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-    if (code) {
-      const raw = code.data.trim();
-      // Expect "SMARTPOS:CART-101" or plain "CART-101"
-      const cartId = raw.startsWith('SMARTPOS:') ? raw.split(':')[1] : raw;
+    const now = Date.now();
+    let detectedRaw = null;
+
+    // Engine 1: Native BarcodeDetector (Hardware Accelerated)
+    if (barcodeDetector) {
+      try {
+        const barcodes = await barcodeDetector.detect(video);
+        if (barcodes && barcodes.length > 0) {
+          detectedRaw = barcodes[0].rawValue.trim();
+        }
+      } catch(err) {
+        // Fallback to jsQR canvas on frame error
+      }
+    }
+
+    // Engine 2: jsQR Fallback
+    if (!detectedRaw && typeof jsQR !== 'undefined') {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        detectedRaw = code.data.trim();
+      }
+    }
+
+    if (detectedRaw && (now - lastScanTime > 2000)) {
+      lastScanTime = now;
+      playScanFeedback();
+      const cartId = detectedRaw.startsWith('SMARTPOS:') ? detectedRaw.split(':')[1] : detectedRaw;
       if (/^CART-/i.test(cartId)) {
         stopScanner();
         pairCart(cartId.toUpperCase());
         return;
+      } else {
+        toast(`Scanned: ${detectedRaw}`, 'info');
       }
     }
   }
   requestAnimationFrame(scanningLoop);
 }
+
 
 function manualPair() {
   const input  = document.getElementById('manual-cart-id');
