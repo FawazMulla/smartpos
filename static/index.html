@@ -1,122 +1,292 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Billing POS</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- jsPDF and AutoTable -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmartPOS — Management Console</title>
+  <meta name="description" content="SmartPOS admin dashboard — inventory, carts, and sales management."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
-    <!-- Topbar -->
-    <header class="topbar">
-        <div class="logo">
-            <div class="logo-icon"><i class="fa-solid fa-store"></i></div>
-            <h2>Smart POS</h2>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     AUTH GATE
+═══════════════════════════════════════════════════════════════════════════ -->
+<div id="auth-gate" class="gate active">
+  <div class="gate-bg">
+    <div class="gate-brand">
+      <div class="gate-logo">
+        <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
+          <rect width="28" height="28" rx="8" fill="rgba(255,255,255,0.15)"/>
+          <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="14" cy="18" r="3" fill="#fff"/>
+        </svg>
+        <span>SmartPOS</span>
+      </div>
+      <h1 class="gate-title">Management Console</h1>
+      <p class="gate-sub">Sign in to access inventory, carts &amp; analytics.</p>
+    </div>
+    <div class="gate-card">
+      <div class="gate-tabs">
+        <button class="gtab active" id="gtab-login" onclick="switchGateTab('login')">Sign In</button>
+        <button class="gtab" id="gtab-reg" onclick="switchGateTab('register')">Register</button>
+        <div class="gtab-bar" id="gtab-bar"></div>
+      </div>
+
+      <form id="gate-login" class="gate-form" onsubmit="adminLogin(event)" novalidate>
+        <div class="gf-group">
+          <label class="gf-label" for="g-user">Username</label>
+          <input id="g-user" class="gf-input" type="text" placeholder="admin" autocomplete="username" required/>
         </div>
-        <div class="topbar-actions">
-            <div class="clock" id="live-clock">--:-- --</div>
+        <div class="gf-group">
+          <label class="gf-label" for="g-pass">Password</label>
+          <input id="g-pass" class="gf-input" type="password" placeholder="••••••••" autocomplete="current-password" required/>
         </div>
-    </header>
+        <div id="gate-login-err" class="gf-error"></div>
+        <button type="submit" class="gf-btn" id="gate-login-btn">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-spin" hidden></span>
+        </button>
+        <p class="gate-hint">Demo: <code>admin / admin123</code></p>
+      </form>
 
-    <main class="pos-layout">
-        <!-- Left Side: Products Database -->
-        <section class="products-section">
-            <div class="section-header">
-                <h2>Product Database</h2>
-                <p>Available items in store</p>
-            </div>
-            <div class="products-grid" id="products-container">
-                <!-- Products will be injected here via JS -->
-            </div>
-        </section>
-
-        <!-- Right Side: Current Cart -->
-        <section class="cart-section">
-            <div class="cart-card">
-                <div class="cart-header">
-                    <h2>Current Bill</h2>
-                    <button class="btn btn-secondary-sm" onclick="openManualModal()">
-                        <i class="fa-solid fa-plus"></i> Manual Add
-                    </button>
-                </div>
-                
-                <div class="cart-body" id="cart-items">
-                    <!-- Cart items will be injected here via JS -->
-                </div>
-
-                <div class="cart-footer">
-                    <div class="total-row">
-                        <span>Total Items</span>
-                        <span id="total-count">0</span>
-                    </div>
-                    <div class="total-row grand-total">
-                        <span>Grand Total</span>
-                        <span id="total-price">₹0</span>
-                    </div>
-                    
-                    <button class="btn btn-primary w-100 mt-3" id="checkout-btn" onclick="openCheckout()" disabled>
-                        <i class="fa-solid fa-file-invoice"></i> Checkout & Print PDF
-                    </button>
-                    <button class="btn btn-danger w-100 mt-2" id="clear-btn" onclick="clearCart()" disabled>
-                        <i class="fa-solid fa-trash"></i> Clear Cart
-                    </button>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Manual Add Modal -->
-    <div class="modal-overlay" id="manual-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Add Item to Bill</h3>
-                <button class="close-btn" onclick="closeManualModal()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="manual-item-select">Select Product (by RFID/Name)</label>
-                    <select id="manual-item-select" class="form-control">
-                        <!-- Options injected via JS -->
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="manual-item-qty">Quantity</label>
-                    <input type="number" id="manual-item-qty" class="form-control" value="1" min="1">
-                </div>
-                <button class="btn btn-primary w-100 mt-3" onclick="submitManualItem()">Add to Bill</button>
-            </div>
+      <form id="gate-reg" class="gate-form hidden" onsubmit="adminRegister(event)" novalidate>
+        <div class="gf-group">
+          <label class="gf-label" for="gr-user">Username</label>
+          <input id="gr-user" class="gf-input" type="text" placeholder="Choose a username" autocomplete="username" required/>
         </div>
+        <div class="gf-group">
+          <label class="gf-label" for="gr-pass">Password</label>
+          <input id="gr-pass" class="gf-input" type="password" placeholder="Min 6 characters" autocomplete="new-password" required/>
+        </div>
+        <div id="gate-reg-err" class="gf-error"></div>
+        <button type="submit" class="gf-btn" id="gate-reg-btn">
+          <span class="btn-text">Create Account</span>
+          <span class="btn-spin" hidden></span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     DASHBOARD
+═══════════════════════════════════════════════════════════════════════════ -->
+<div id="dashboard" class="gate">
+
+  <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="8" fill="rgba(255,255,255,0.12)"/>
+        <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="18" r="3" fill="#fff"/>
+      </svg>
+      <span>SmartPOS</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="snav-item active" data-view="overview" onclick="switchView('overview', this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Overview
+      </button>
+      <button class="snav-item" data-view="carts" onclick="switchView('carts', this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        Live Carts
+      </button>
+      <button class="snav-item" data-view="inventory" onclick="switchView('inventory', this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        Inventory
+      </button>
+      <button class="snav-item" data-view="qrcodes" onclick="switchView('qrcodes', this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h.01M14 17h3M17 14v7M20 17h.01M20 21h.01"/></svg>
+        Cart QR Codes
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sf-user">
+        <div class="sf-avatar" id="sf-avatar">A</div>
+        <div class="sf-info">
+          <span id="sf-username">Admin</span>
+          <span id="sf-role" class="sf-role">Management</span>
+        </div>
+      </div>
+      <button class="sf-logout" onclick="adminLogout()" title="Sign out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="dash-main" id="dash-main">
+    <div class="dash-topbar">
+      <div class="dash-page-title" id="dash-page-title">Overview</div>
+      <div class="dash-topbar-right">
+        <div class="live-dot"></div>
+        <span style="font-size:12px;color:#93939f;">Live</span>
+        <a href="/mobile" target="_blank" class="topbar-pill">Open Customer App ↗</a>
+      </div>
     </div>
 
-    <!-- Payment Modal -->
-    <div class="modal-overlay" id="payment-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Checkout Success</h3>
-                <button class="close-btn" onclick="closePaymentModal()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
-                <h2 id="checkout-total-display">₹0</h2>
-                <p id="checkout-items-count">Payment completed successfully.</p>
-                <div class="modal-actions mt-4">
-                    <button class="btn btn-secondary" onclick="closePaymentModal()">Close</button>
-                    <button class="btn btn-primary" onclick="generatePDF()"><i class="fa-solid fa-file-pdf"></i> Download Receipt</button>
-                </div>
-            </div>
+    <!-- ▸ OVERVIEW ─────────────────────────────────────────────────────── -->
+    <section id="view-overview" class="dash-view active">
+      <div class="stat-grid" id="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Products</div>
+          <div class="stat-value" id="stat-products">—</div>
+          <div class="stat-icon green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
+          </div>
         </div>
-    </div>
+        <div class="stat-card">
+          <div class="stat-label">Shelf Stock</div>
+          <div class="stat-value" id="stat-shelf">—</div>
+          <div class="stat-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Carts</div>
+          <div class="stat-value" id="stat-carts">—</div>
+          <div class="stat-icon coral">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Items Sold</div>
+          <div class="stat-value" id="stat-sold">—</div>
+          <div class="stat-icon navy">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+        </div>
+      </div>
 
-    <script src="/static/script.js"></script>
+      <div class="section-header"><h2 class="section-title">Live Cart Overview</h2></div>
+      <div id="overview-cart-list" class="overview-cart-list">
+        <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- ▸ LIVE CARTS ───────────────────────────────────────────────────── -->
+    <section id="view-carts" class="dash-view">
+      <div class="section-header">
+        <h2 class="section-title">Live Carts</h2>
+        <button class="pill-btn" onclick="refreshCarts()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div id="carts-grid" class="carts-grid">
+        <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- ▸ INVENTORY ─────────────────────────────────────────────────────── -->
+    <section id="view-inventory" class="dash-view">
+      <div class="section-header">
+        <h2 class="section-title">Inventory Management</h2>
+        <button class="pill-btn accent" onclick="openAddProduct()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Product
+        </button>
+      </div>
+
+      <div class="inventory-table-wrap">
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>UID (RFID)</th>
+              <th>Price</th>
+              <th>Shelf Stock</th>
+              <th>Warehouse</th>
+              <th>Stock Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="inventory-tbody">
+            <tr><td colspan="7" class="table-empty">Loading products…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Add Product form -->
+      <div id="add-product-panel" class="side-panel hidden">
+        <div class="side-panel-inner">
+          <div class="sp-header">
+            <h3 class="sp-title">Add New Product</h3>
+            <button class="sp-close" onclick="closeAddProduct()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <form id="add-product-form" onsubmit="addProduct(event)" novalidate>
+            <div class="sp-group">
+              <label class="sp-label">RFID UID *</label>
+              <input class="sp-input" id="new-uid" type="text" placeholder="e.g. A1B2C3D4" required style="text-transform:uppercase"/>
+            </div>
+            <div class="sp-group">
+              <label class="sp-label">Product Name *</label>
+              <input class="sp-input" id="new-name" type="text" placeholder="e.g. Milk 500ml" required/>
+            </div>
+            <div class="sp-group">
+              <label class="sp-label">Price (Rs.) *</label>
+              <input class="sp-input" id="new-price" type="number" placeholder="50" min="1" required/>
+            </div>
+            <div class="sp-row-2">
+              <div class="sp-group">
+                <label class="sp-label">Shelf Stock</label>
+                <input class="sp-input" id="new-shelf" type="number" placeholder="50" min="0" value="50"/>
+              </div>
+              <div class="sp-group">
+                <label class="sp-label">Warehouse</label>
+                <input class="sp-input" id="new-wh" type="number" placeholder="200" min="0" value="200"/>
+              </div>
+            </div>
+            <div id="add-prod-err" class="gf-error"></div>
+            <button type="submit" class="gf-btn" id="add-prod-btn">
+              <span class="btn-text">Add Product</span>
+              <span class="btn-spin" hidden></span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ▸ QR CODES ──────────────────────────────────────────────────────── -->
+    <section id="view-qrcodes" class="dash-view">
+      <div class="section-header">
+        <h2 class="section-title">Cart QR Codes</h2>
+        <span class="section-note">Static — one QR per cart, never changes.</span>
+      </div>
+      <div id="qr-grid" class="qr-codes-grid">
+        <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Cart Detail Modal -->
+<div id="cart-modal" class="modal-overlay hidden" onclick="closeCartModal(event)">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-cart-title">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modal-cart-title">Cart Details</h3>
+      <button class="modal-close" onclick="closeCartModal()" aria-label="Close">&times;</button>
+    </div>
+    <div id="modal-cart-body" class="modal-body">Loading…</div>
+    <div class="modal-footer">
+      <button class="pill-btn" onclick="seedCart()">Seed Mock Groceries</button>
+      <button class="pill-btn danger" onclick="clearCart()">Clear Cart</button>
+      <button class="pill-btn accent" onclick="closeCartModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="dash-toast" class="dash-toast" role="alert" aria-live="polite"></div>
+
+<script src="/static/script.js"></script>
 </body>
 </html>

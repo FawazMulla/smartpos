@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: smartpos
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    plan: free
+    envVars:
+      - key: DB_PATH
+        value: /var/data/pos.db
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: smartpos-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,86 +1,129 @@
-# Smart Billing POS System
+# SmartPOS — Intelligent Retail Ecosystem
 
-This is a complete Smart Point of Sale (POS) backend and frontend designed to integrate directly with an ESP8266 or Arduino, featuring an SQLite3 database and a clean, single-page UI.
+A full-stack smart shopping cart system built with FastAPI, SQLite, and ESP8266/RFID hardware. Customers scan a cart QR code on their phone, items are scanned at the shelf via RFID, and they pay directly in the mobile app.
 
-## System Architecture
-
-1. **FastAPI Backend (`main.py`)**: Powered by an **SQLite3 database** (`pos.db`) that persistently stores the product catalog and the current billing cart state. Exposes clean REST APIs.
-2. **Frontend UI (`static/index.html`)**: A clean, single-page light theme UI showing products on the left and the active bill on the right. Automatically updates the total math (quantity x price in Rupees ₹).
-3. **ESP8266 Client (`esp8266_client.ino`)**: Scans RFID cards and directly sends HTTP POST requests over Wi-Fi to the FastAPI backend.
-
-## Setup and Run
-
-1. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Start the server (this will automatically generate the `pos.db` SQLite database if it doesn't exist):
-   ```bash
-   uvicorn main:app --host 127.0.0.1 --port 8000 --reload
-   ```
-3. Open `http://127.0.0.1:8000/` in your browser.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
 ---
 
-## API Documentation
+## System Architecture
 
-The server exposes the following REST APIs:
-
-### 1. `GET /api/products`
-Returns the dictionary of all products available in the SQLite database.
-**Response (200 OK)**
-```json
-{
-  "7297745C": {"item": "Rice 1kg", "price": 20},
-  "F175D3AD": {"item": "Milk", "price": 30}
-}
+```
+[ESP8266 + RFID] ──POST /api/scan──► [FastAPI Backend]
+                                            │
+                  ┌─────────────────────────┤
+                  ▼                         ▼
+         [Customer Mobile App]    [Management Console]
+         /mobile                  /
+         • Scan cart QR           • Inventory CRUD
+         • View live cart         • Live cart monitoring
+         • Checkout & pay         • Static QR codes
 ```
 
-### 2. `POST /api/scan`
-Add an item to the cart using its RFID UID. This is the endpoint the ESP8266 calls, and is also used by the frontend for "Manual Adds".
-**Request Body**
-```json
-{
-  "uid": "7297745C",
-  "quantity": 1
-}
-```
-*(Note: `quantity` is optional and defaults to `1` if omitted, which is perfect for the ESP8266)*
-**Response (200 OK)**
-```json
-{
-  "status": "success",
-  "message": "Added 1x Rice 1kg",
-  "cart": [ ... ]
-}
+---
+
+## Quick Start (Local)
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/YOUR_USERNAME/smartpos.git
+cd smartpos
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run
+python main.py
 ```
 
-### 3. `GET /api/cart`
-Returns the current items in the cart (grouped by quantity) and the total price. Used by the UI for live polling.
-**Response (200 OK)**
-```json
-{
-  "items": [
-    {"uid": "7297745C", "item": "Rice 1kg", "price": 20, "quantity": 3}
-  ],
-  "total": 60
-}
+Open:
+- **Management Console:** http://localhost:8000
+- **Customer Mobile App:** http://localhost:8000/mobile
+
+### Default Accounts
+
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin` | `admin123` |
+| Customer | `customer` | `customer123` |
+| Test User | `testuser` | `test1234` |
+
+---
+
+## Deploy to Render (One-Click)
+
+### Option A — Deploy Button
+Click the **Deploy to Render** button above. Render will read `render.yaml` and automatically:
+- Create a **Web Service** running `python main.py`
+- Attach a **1 GB persistent disk** at `/var/data` (so your database survives redeploys)
+- Set the `DB_PATH` environment variable to `/var/data/pos.db`
+
+### Option B — Manual Setup
+1. Go to [render.com](https://render.com) and sign in.
+2. Click **New → Blueprint**.
+3. Connect your GitHub/GitLab repository.
+4. Render detects `render.yaml` automatically — click **Apply**.
+5. Wait ~2 minutes for the first deploy.
+6. Your app is live at `https://smartpos-XXXX.onrender.com`.
+
+### After Deploying
+Update your ESP8266 firmware with the Render URL:
+```cpp
+const char* SERVER_HOST = "smartpos-xxxx.onrender.com";
+const int   SERVER_PORT = 443;  // HTTPS on Render
+```
+> ⚠️ You'll also need to update the HTTP call to use `https://`. See [ESP8266 HTTPS guide](https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/client-secure-examples.html) or use a local server for hardware testing.
+
+---
+
+## Project Structure
+
+```
+smartpos/
+├── main.py                  # FastAPI backend — all API routes
+├── requirements.txt         # Python dependencies
+├── render.yaml              # Render deployment blueprint
+├── .gitignore
+├── esp8266_client.ino       # Arduino firmware for smart cart hardware
+└── static/
+    ├── index.html           # Management Console (POS dashboard)
+    ├── style.css
+    ├── script.js
+    ├── mobile.html          # Customer Mobile App
+    ├── mobile.css
+    └── mobile.js
 ```
 
-### 4. `POST /api/checkout`
-Calculates the final total, generates a new bill record in the database, and automatically clears the active cart.
-**Response (200 OK)**
-```json
-{
-  "status": "success",
-  "message": "Bill created successfully",
-  "bill_id": 1,
-  "total": 60
-}
-```
+---
 
-### 5. `POST /api/cart/remove/{index}`
-Removes a specific item from the cart based on its array index position on the screen.
+## API Reference
 
-### 6. `POST /api/cart/clear`
-Clears all items in the current cart (typically called manually if the order is canceled without creating a bill).
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/auth/register` | Create new account |
+| POST | `/api/auth/login` | Authenticate |
+| GET | `/api/carts` | List all carts with status |
+| POST | `/api/carts/pair` | Pair customer to cart |
+| POST | `/api/carts/unpair` | Release cart |
+| POST | `/api/scan` | RFID scan — add item to cart |
+| GET | `/api/cart/{cart_id}` | Get cart contents + weight |
+| POST | `/api/cart/{cart_id}/checkout` | Checkout and generate bill |
+| GET | `/api/bills/{bill_id}/pdf` | Download PDF receipt |
+| GET | `/api/products` | List all products |
+| POST | `/api/inventory/products` | Add product |
+| DELETE | `/api/inventory/products/{uid}` | Delete product |
+| GET | `/api/inventory/summary` | Stock overview stats |
+
+---
+
+## Hardware Setup
+
+See [ARDUINO_SETUP.md](ARDUINO_SETUP.md) for the full wiring guide, library installation, and multi-cart configuration.
+
+---
+
+## Static QR Code Rule
+
+> **One cart = one permanent QR code. It never changes.**
+
+Each physical cart has a `CART_ID` flashed into its firmware (e.g. `CART-101`). The QR code printed from the Management Console encodes `SMARTPOS:CART-101`. When a customer scans it, they connect to that specific cart's live session. Adding a new cart only requires flashing a new `CART_ID` — the server auto-creates it on first scan.

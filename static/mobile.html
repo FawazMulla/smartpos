@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>SmartPOS — Customer App</title>
+  <meta name="description" content="Smart shopping cart — scan, shop, and pay seamlessly."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/mobile.css"/>
+</head>
+<body>
+
+<!-- ═══ AUTH SCREEN ═══════════════════════════════════════════════════════════ -->
+<div id="screen-auth" class="screen active">
+  <div class="auth-bg">
+    <div class="auth-brand-band">
+      <div class="auth-brand-inner">
+        <div class="brand-mark">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="8" fill="#ffffff" fill-opacity="0.15"/>
+            <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="14" cy="18" r="3" fill="#ffffff"/>
+          </svg>
+        </div>
+        <span class="brand-name">SmartPOS</span>
+      </div>
+      <p class="brand-tagline">Intelligent retail, reimagined.</p>
+    </div>
+
+    <div class="auth-card-wrap">
+      <!-- Tab switcher -->
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" id="tab-register" role="tab" aria-selected="false" onclick="switchAuthTab('register')">Register</button>
+        <div class="auth-tab-indicator" id="auth-tab-indicator"></div>
+      </div>
+
+      <!-- Login form -->
+      <form id="form-login" class="auth-form" onsubmit="handleLogin(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="login-user">Username</label>
+          <input id="login-user" class="form-input" type="text" placeholder="Enter your username" autocomplete="username" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-pass">Password</label>
+          <div class="input-wrap">
+            <input id="login-pass" class="form-input" type="password" placeholder="Enter your password" autocomplete="current-password" required/>
+            <button type="button" class="eye-btn" onclick="togglePassword('login-pass', this)" aria-label="Toggle password visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="login-error" class="form-error" role="alert"></div>
+        <button type="submit" class="btn-primary" id="login-btn">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+        <p class="form-demo-hint">Demo: <code>customer / customer123</code> &nbsp;·&nbsp; Admin: <code>admin / admin123</code></p>
+      </form>
+
+      <!-- Register form -->
+      <form id="form-register" class="auth-form hidden" onsubmit="handleRegister(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="reg-user">Choose a Username</label>
+          <input id="reg-user" class="form-input" type="text" placeholder="Minimum 3 characters" autocomplete="username" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-pass">Password</label>
+          <div class="input-wrap">
+            <input id="reg-pass" class="form-input" type="password" placeholder="Minimum 6 characters" autocomplete="new-password" required/>
+            <button type="button" class="eye-btn" onclick="togglePassword('reg-pass', this)" aria-label="Toggle password visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="register-error" class="form-error" role="alert"></div>
+        <button type="submit" class="btn-primary" id="register-btn">
+          <span class="btn-text">Create Account</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCAN SCREEN ═══════════════════════════════════════════════════════════ -->
+<div id="screen-scan" class="screen">
+  <div class="top-nav">
+    <div class="nav-user">
+      <div class="avatar" id="nav-avatar">C</div>
+      <div>
+        <div class="nav-username" id="nav-username">Customer</div>
+        <div class="nav-sub">SmartPOS Shopping</div>
+      </div>
+    </div>
+    <button class="nav-logout" onclick="logout()" aria-label="Sign out">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+
+  <div class="scan-body">
+    <div class="scan-hero">
+      <h1 class="scan-title">Scan Your Cart</h1>
+      <p class="scan-subtitle">Point your camera at the cart QR code to start shopping.</p>
+    </div>
+
+    <!-- QR Camera -->
+    <div class="qr-frame-wrap">
+      <div class="qr-frame" id="qr-frame">
+        <div class="qr-corner tl"></div>
+        <div class="qr-corner tr"></div>
+        <div class="qr-corner bl"></div>
+        <div class="qr-corner br"></div>
+        <div class="qr-scan-line" id="qr-scan-line"></div>
+        <video id="qr-video" autoplay muted playsinline></video>
+        <canvas id="qr-canvas" hidden></canvas>
+        <div class="qr-idle-msg" id="qr-idle-msg">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h.01M14 17h3M17 14v7M20 17h.01M20 21h.01"/></svg>
+          <p>Tap to activate camera</p>
+        </div>
+      </div>
+      <button class="btn-scan-start" id="btn-scan-start" onclick="startScanner()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Activate Camera
+      </button>
+    </div>
+
+    <!-- Manual cart ID -->
+    <div class="manual-entry">
+      <p class="manual-or">— or enter Cart ID manually —</p>
+      <div class="manual-row">
+        <input id="manual-cart-id" class="form-input sm" type="text" placeholder="e.g. CART-101" style="text-transform:uppercase"/>
+        <button class="btn-secondary-sm" onclick="manualPair()">Connect</button>
+      </div>
+    </div>
+
+    <!-- Available carts -->
+    <div class="available-carts-section">
+      <h2 class="section-label">Available Carts</h2>
+      <div id="available-carts-list" class="available-carts-list">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CART SCREEN ═══════════════════════════════════════════════════════════ -->
+<div id="screen-cart" class="screen">
+  <div class="top-nav">
+    <button class="nav-back" onclick="unpairCart()" aria-label="Back to scan">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="nav-cart-info">
+      <span class="nav-cart-name" id="nav-cart-name">Cart</span>
+      <span class="nav-cart-id" id="nav-cart-id-label">—</span>
+    </div>
+    <div class="nav-weight-badge" id="weight-badge" title="Weight sensor status">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+  </div>
+
+  <!-- Cart items -->
+  <div class="cart-scroll" id="cart-scroll">
+    <div class="cart-items-list" id="cart-items-list">
+      <div class="cart-empty" id="cart-empty" hidden>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d9d9dd" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <p>Your cart is empty.</p>
+        <p class="empty-sub">Items scanned at the shelf will appear here.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart footer -->
+  <div class="cart-footer">
+    <div class="cart-summary">
+      <div class="summary-row">
+        <span class="summary-label">Items</span>
+        <span class="summary-val" id="cart-item-count">0</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Subtotal</span>
+        <span class="summary-val total" id="cart-total">Rs. 0</span>
+      </div>
+    </div>
+    <button class="btn-primary checkout-btn" id="checkout-btn" onclick="openPayment()" disabled>
+      Proceed to Checkout
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ═══ PAYMENT SCREEN ════════════════════════════════════════════════════════ -->
+<div id="screen-payment" class="screen">
+  <div class="top-nav">
+    <button class="nav-back" onclick="showScreen('screen-cart')" aria-label="Back to cart">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="nav-cart-info">
+      <span class="nav-cart-name">Checkout</span>
+    </div>
+  </div>
+
+  <div class="payment-body">
+    <div class="payment-amount-card">
+      <div class="pay-label">Amount Due</div>
+      <div class="pay-amount" id="pay-amount">Rs. 0</div>
+      <div class="pay-cart-id" id="pay-cart-label">—</div>
+    </div>
+
+    <div class="payment-methods">
+      <h2 class="pay-section-title">Select Payment Method</h2>
+      <div class="pay-method-list">
+        <label class="pay-method-card" id="method-card-card">
+          <input type="radio" name="pay-method" value="card" checked onchange="updatePaymentUI()"/>
+          <div class="pay-method-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          </div>
+          <div>
+            <div class="pay-method-name">Card</div>
+            <div class="pay-method-sub">Credit / Debit</div>
+          </div>
+          <div class="pay-method-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </label>
+
+        <label class="pay-method-card" id="method-card-upi">
+          <input type="radio" name="pay-method" value="upi" onchange="updatePaymentUI()"/>
+          <div class="pay-method-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <div class="pay-method-name">UPI</div>
+            <div class="pay-method-sub">Instant transfer</div>
+          </div>
+          <div class="pay-method-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </label>
+
+        <label class="pay-method-card" id="method-card-wallet">
+          <input type="radio" name="pay-method" value="wallet" onchange="updatePaymentUI()"/>
+          <div class="pay-method-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+          </div>
+          <div>
+            <div class="pay-method-name">Wallet</div>
+            <div class="pay-method-sub">PayTM, PhonePe…</div>
+          </div>
+          <div class="pay-method-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Card details (shown for card) -->
+    <div id="card-details" class="pay-details-section">
+      <div class="form-group">
+        <label class="form-label">Card Number</label>
+        <input class="form-input" type="text" placeholder="4242 4242 4242 4242" maxlength="19" oninput="formatCardNumber(this)"/>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label">Expiry</label>
+          <input class="form-input" type="text" placeholder="MM / YY" maxlength="7"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">CVV</label>
+          <input class="form-input" type="text" placeholder="•••" maxlength="3"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPI details -->
+    <div id="upi-details" class="pay-details-section hidden">
+      <div class="form-group">
+        <label class="form-label">UPI ID</label>
+        <input class="form-input" type="text" placeholder="yourname@bank"/>
+      </div>
+    </div>
+
+    <!-- Wallet details -->
+    <div id="wallet-details" class="pay-details-section hidden">
+      <p class="wallet-hint">A payment link will be sent to your registered mobile number.</p>
+    </div>
+
+    <button class="btn-primary pay-btn" id="pay-btn" onclick="processPayment()">
+      <span class="btn-text" id="pay-btn-text">Pay Now</span>
+      <span class="btn-spinner" hidden></span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══ SUCCESS SCREEN ════════════════════════════════════════════════════════ -->
+<div id="screen-success" class="screen">
+  <div class="success-body">
+    <div class="success-icon-wrap">
+      <div class="success-ring"></div>
+      <svg class="success-check" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h1 class="success-title">Payment Successful!</h1>
+    <p class="success-sub" id="success-sub">Thank you for shopping with SmartPOS.</p>
+    <div class="success-receipt-card" id="success-receipt-card">
+      <div class="receipt-row">
+        <span>Bill ID</span><span id="receipt-bill-id">—</span>
+      </div>
+      <div class="receipt-row">
+        <span>Cart</span><span id="receipt-cart-id">—</span>
+      </div>
+      <div class="receipt-row">
+        <span>Amount</span><span id="receipt-amount" class="receipt-total">—</span>
+      </div>
+    </div>
+    <button class="btn-outline" id="btn-download-receipt" onclick="downloadReceipt()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download Receipt
+    </button>
+    <button class="btn-primary" onclick="startNewSession()" style="margin-top:12px">
+      Shop Again
+    </button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="/static/mobile.js"></script>
+</body>
+</html>
